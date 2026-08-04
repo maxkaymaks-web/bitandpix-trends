@@ -22,30 +22,47 @@
 
 ## Шаг 2 — Анализ видео
 
-Когда Настя присылает видео — **всегда** анализируй через fal.ai. Только так можно услышать музыку, речь и звуки — они часть тренда.
+Когда Настя присылает видео — **всегда** анализируй двумя шагами через fal.ai.
 
-**Модель:** `openrouter/router/video`  
 **Ключ:** `~/.claude/.env.fal`, переменная `FAL_KEY`
+
+### Шаг 2а — Визуальный анализ (кадры)
+
+```bash
+ffmpeg -i "/path/to/video.mp4" -vf "fps=1" /tmp/frame_%03d.jpg -y
+```
+
+Прочитай все кадры через Read. Смотри: монтаж, переходы, субтитры, что происходит на экране, смена планов.
+
+### Шаг 2б — Аудио и речь через fal.ai
 
 ```js
 import { fal } from "@fal-ai/client";
 import fs from "fs";
+import { execSync } from "child_process";
 
-fal.config({ credentials: process.env.FAL_KEY });
+const FAL_KEY = fs.readFileSync("/Users/maxkaymaks/.claude/.env.fal", "utf8")
+  .match(/FAL_KEY=(.+)/)[1].trim();
+fal.config({ credentials: FAL_KEY });
 
-const buf = fs.readFileSync("/path/to/video.mp4");
-const videoUrl = await fal.storage.upload(new Blob([buf], { type: "video/mp4" }));
+// Извлечь аудио
+execSync(`ffmpeg -i "/path/to/video.mp4" -vn -q:a 0 /tmp/audio.mp3 -y 2>/dev/null`);
 
-const result = await fal.run("fal-ai/any-llm", {
-  input: {
-    model: "openrouter/router/video",
-    prompt: "Analyze this video: describe the visual format, editing technique, camera work, music/audio, speech or text on screen. Focus on the repeatable pattern — what trend or format does this represent that other creators could replicate?",
-    video_url: videoUrl,
-  },
+// Загрузить и транскрибировать
+const audioUrl = await fal.storage.upload(
+  new Blob([fs.readFileSync("/tmp/audio.mp3")], { type: "audio/mp3" })
+);
+
+const result = await fal.subscribe("fal-ai/elevenlabs/speech-to-text", {
+  input: { audio_url: audioUrl, language_code: "ru" },
+  logs: true,
+  onQueueUpdate: (u) => u.logs?.forEach(l => console.log("[stt]", l.message)),
 });
 
-console.log(result.data.output);
+console.log(result.data.text);
 ```
+
+Если STT вернул только `[музыка]` — речи нет, весь текст на экране визуальный. Если есть слова — включи в анализ тренда.
 
 Твоя задача — найти **тренд**: воспроизводимый паттерн, приём, формат. Не пересказывай весь сюжет видео.
 

@@ -22,7 +22,30 @@
 
 ## Шаг 2 — Анализ видео
 
-Когда Настя присылает видео — анализируй его сам. Если нужен внешний анализ через fal.ai: ключ лежит у Насти в `~/.claude/.env.fal`, переменная `FAL_KEY`.
+Когда Настя присылает видео — **всегда** анализируй через fal.ai. Только так можно услышать музыку, речь и звуки — они часть тренда.
+
+**Модель:** `openrouter/router/video`  
+**Ключ:** `~/.claude/.env.fal`, переменная `FAL_KEY`
+
+```js
+import { fal } from "@fal-ai/client";
+import fs from "fs";
+
+fal.config({ credentials: process.env.FAL_KEY });
+
+const buf = fs.readFileSync("/path/to/video.mp4");
+const videoUrl = await fal.storage.upload(new Blob([buf], { type: "video/mp4" }));
+
+const result = await fal.run("fal-ai/any-llm", {
+  input: {
+    model: "openrouter/router/video",
+    prompt: "Analyze this video: describe the visual format, editing technique, camera work, music/audio, speech or text on screen. Focus on the repeatable pattern — what trend or format does this represent that other creators could replicate?",
+    video_url: videoUrl,
+  },
+});
+
+console.log(result.data.output);
+```
 
 Твоя задача — найти **тренд**: воспроизводимый паттерн, приём, формат. Не пересказывай весь сюжет видео.
 
